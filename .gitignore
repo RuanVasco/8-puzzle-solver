@@ -1,1 +1,8 @@
 build/
+out/
+.vscode/
+
+*.o
+*.obj
+*.exe
+*.pdb

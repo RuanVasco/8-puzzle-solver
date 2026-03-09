@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 
-project(8_puzzle_solver VERSION 1.0 LANGUAGES CXX)
+project(8_puzzle_solver VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -28,3 +28,5 @@ add_executable(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
+
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)

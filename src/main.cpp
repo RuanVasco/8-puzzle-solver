@@ -21,9 +21,40 @@ int main() {
 
     Button solveButton(200, 25, 200, 50, "Solve");
 
+    std::vector<PuzzleBoard> solutionPath;
+    bool isAnimating = false;
+    int currentStep = 0;
+    int framesCounter = 0;
+
     while (!WindowShouldClose()) {
-        if (solveButton.is_clicked()) {
-            std::cout << "Solver iniciado!" << std::endl;
+        if (solveButton.is_clicked() && !isAnimating) {
+            solveButton.set_disabled(true);
+
+            solutionPath = solver.solve_bfs(puzzle);
+
+            if (!solutionPath.empty()) {
+                isAnimating = true;
+                currentStep = 0;
+                framesCounter = 0;
+            }
+            else {
+                solveButton.set_disabled(false);
+            }
+        }
+
+        if (isAnimating) {
+            framesCounter++;
+            if (framesCounter >= 30) {
+                framesCounter = 0;
+                if (currentStep < solutionPath.size() - 1) {
+                    currentStep++;
+                    puzzle = solutionPath[currentStep];
+                }
+                else {
+                    isAnimating = false;
+                    solveButton.set_disabled(false);
+                }
+            }
         }
 
         BeginDrawing();

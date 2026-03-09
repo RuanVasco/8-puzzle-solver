@@ -17,4 +17,8 @@ public:
     const std::vector<int>& get_board() const {
         return board;
     }
+
+    std::vector<PuzzleBoard> PuzzleBoard::get_neighbors() const;
+
+    bool PuzzleBoard::is_goal() const;
 };

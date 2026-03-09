@@ -11,4 +11,4 @@ include_directories(include)
 add_executable(${PROJECT_NAME} 
     src/main.cpp
     src/models/PuzzleBoard.cpp
-)
+ "include/models/Solver.h" "src/models/Solver.cpp")

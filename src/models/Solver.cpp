@@ -10,7 +10,7 @@ int Solver::get_tested_states() const {
     return this->last_tested_states;
 }
 
-std::vector<PuzzleBoard> Solver::solve_bfs(PuzzleBoard initial_board) {
+std::vector<PuzzleBoard> Solver::solve_bfs(PuzzleBoard initial_board, PuzzleBoard goal_board) {
     std::queue<PuzzleBoard> queue;
     std::set<std::vector<int>> visited;
     std::map<std::vector<int>, PuzzleBoard> parent_map;
@@ -19,14 +19,12 @@ std::vector<PuzzleBoard> Solver::solve_bfs(PuzzleBoard initial_board) {
     visited.insert(initial_board.get_board());
 
     bool found = false;
-    PuzzleBoard goal_board = initial_board;
 
     while (!queue.empty()) {
         PuzzleBoard current = queue.front();
         queue.pop();
 
-        if (current.is_goal()) {
-            goal_board = current;
+        if (current.get_board() == goal_board.get_board()) {
             found = true;
             break;
         }

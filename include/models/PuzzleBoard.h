@@ -19,5 +19,4 @@ public:
     }
 
     std::vector<PuzzleBoard> get_neighbors() const;
-    bool is_goal() const;
 };

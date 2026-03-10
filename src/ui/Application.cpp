@@ -3,7 +3,7 @@
 #include <iostream>
 
 const LangStrings Application::LANG_PT = {
-    "Definir Estado", "Embaralhar", "Resolver", "Ver Arvore", "Voltar",
+    "Definir Estado Inicial", "Embaralhar", "Resolver", "Ver Arvore", "Voltar",
     "Estados Testados: ", "SEM SOLUCAO", "Passos: ", "Processando...",
     "Digite 9 digitos (0-8):", "ENTER confirma, ESC cancela",
     "Arvore da Solucao", "movimentos", "estados testados",
@@ -23,8 +23,8 @@ Application::Application()
     puzzle(3, { 1, 2, 3, 4, 0, 5, 7, 8, 6 }), solver(),
     btnInput(25, 50, 200, 50, "Set Initial State"),
     btnShuffle(25, 120, 200, 50, "Shuffle"),
-    btnSolve(25, 190, 200, 50, "Solve"),
-    btnShowTree(25, 310, 200, 50, "Ver Arvore", DARKGREEN, GREEN, GRAY),
+    btnSolve(25, 190, 200, 50, "Solve", DARKGREEN, GREEN, GRAY),
+    btnShowTree(25, 335, 200, 50, "Ver Arvore", DARKBLUE, BLUE, GRAY),
     btnBack(screenWidth - 130, 10, 110, 40, "Voltar", DARKGRAY, GRAY, DARKGRAY),
     isAnimating(false), isProcessing(false), isSolved(false), isModalOpen(false),
     isTreeViewOpen(false), currentStep(0), framesCounter(0), testedStates(0),
@@ -123,7 +123,7 @@ void Application::handleEvents() {
             btnSolve.set_disabled(true);
             isProcessing = true;
             isSolved = false;
-            futureSolution = std::async(std::launch::async, &Solver::solve_bfs, &solver, puzzle);
+            futureSolution = std::async(std::launch::async, &Solver::solve_bfs, &solver, puzzle, PuzzleBoard(3, { 1, 2, 3, 4, 5, 6, 7, 8, 0 }));
         }
 
         if (isSolved && !solutionPath.empty() && !isAnimating && btnShowTree.is_clicked()) {
@@ -222,20 +222,23 @@ void Application::updateLogic() {
 
 void Application::renderSidebar() {
     DrawRectangle(0, 0, sidebarWidth, screenHeight, LIGHTGRAY);
+
+    BeginScissorMode(0, 0, sidebarWidth, screenHeight);
+
     btnInput.draw();
     btnShuffle.draw();
     btnSolve.draw();
 
     if (isSolved) {
-        std::string statesText = lang.testedStates + std::to_string(testedStates);
-        DrawText(statesText.c_str(), 25, 260, 20, DARKGRAY);
+        DrawText(lang.testedStates.c_str(), 25, 258, 17, DARKGRAY);
+        DrawText(std::to_string(testedStates).c_str(), 25, 277, 20, DARKGRAY);
 
         if (solutionPath.empty()) {
-            DrawText(lang.unsolvable.c_str(), 25, 290, 20, RED);
+            DrawText(lang.unsolvable.c_str(), 25, 305, 20, RED);
         }
         else if (!isAnimating) {
             std::string stepsText = lang.steps + std::to_string((int)solutionPath.size() - 1);
-            DrawText(stepsText.c_str(), 25, 285, 20, DARKGRAY);
+            DrawText(stepsText.c_str(), 25, 305, 20, DARKGRAY);
             btnShowTree.draw();
         }
     }
@@ -245,6 +248,8 @@ void Application::renderSidebar() {
     }
 
     renderFlags();
+
+    EndScissorMode();
 }
 
 void Application::renderBoard() {

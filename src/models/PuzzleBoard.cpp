@@ -34,8 +34,3 @@ std::vector<PuzzleBoard> PuzzleBoard::get_neighbors() const {
 
     return neighbors;
 }
-
-bool PuzzleBoard::is_goal() const {
-    std::vector<int> goal_state = { 1, 2, 3, 4, 5, 6, 7, 8, 0 };
-    return board == goal_state;
-}

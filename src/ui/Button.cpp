@@ -52,6 +52,10 @@ void Button::set_disabled(bool disabled) {
     this->isDisabled = disabled;
 }
 
+void Button::set_text(const std::string& t) {
+    this->text = t;
+}
+
 bool Button::get_is_hovered() const {
     return this->isHovered;
 }

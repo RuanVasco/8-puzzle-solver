@@ -1,5 +1,22 @@
 #include "ui/Application.h"
+#include <algorithm>
 #include <iostream>
+
+const LangStrings Application::LANG_PT = {
+    "Definir Estado", "Embaralhar", "Resolver", "Ver Arvore", "Voltar",
+    "Estados Testados: ", "SEM SOLUCAO", "Passos: ", "Processando...",
+    "Digite 9 digitos (0-8):", "ENTER confirma, ESC cancela",
+    "Arvore da Solucao", "movimentos", "estados testados",
+    "Estado Inicial", "Estado Final (Meta)", "Passo"
+};
+
+const LangStrings Application::LANG_EN = {
+    "Set Initial State", "Shuffle", "Solve", "View Tree", "Back",
+    "Tested States: ", "UNSOLVABLE", "Steps: ", "Processing...",
+    "Enter 9 unique digits (0-8):", "ENTER to confirm, ESC to cancel",
+    "Solution Tree", "moves", "states tested",
+    "Initial State", "Final State (Goal)", "Step"
+};
 
 Application::Application()
     : screenWidth(850), screenHeight(600), sidebarWidth(250), cellSize(200),
@@ -7,8 +24,11 @@ Application::Application()
     btnInput(25, 50, 200, 50, "Set Initial State"),
     btnShuffle(25, 120, 200, 50, "Shuffle"),
     btnSolve(25, 190, 200, 50, "Solve"),
+    btnShowTree(25, 310, 200, 50, "Ver Arvore", DARKGREEN, GREEN, GRAY),
+    btnBack(screenWidth - 130, 10, 110, 40, "Voltar", DARKGRAY, GRAY, DARKGRAY),
     isAnimating(false), isProcessing(false), isSolved(false), isModalOpen(false),
-    currentStep(0), framesCounter(0), testedStates(0) {
+    isTreeViewOpen(false), currentStep(0), framesCounter(0), testedStates(0),
+    treeScrollOffset(0), currentLang(Language::PT), lang(LANG_PT) {
 
     InitWindow(screenWidth, screenHeight, "8 Puzzle Solver");
     SetTargetFPS(60);
@@ -17,6 +37,16 @@ Application::Application()
 
 Application::~Application() {
     CloseWindow();
+}
+
+void Application::setLanguage(Language l) {
+    currentLang = l;
+    lang = (l == Language::PT) ? LANG_PT : LANG_EN;
+    btnInput.set_text(lang.btnInput);
+    btnShuffle.set_text(lang.btnShuffle);
+    btnSolve.set_text(lang.btnSolve);
+    btnShowTree.set_text(lang.btnShowTree);
+    btnBack.set_text(lang.btnBack);
 }
 
 void Application::run() {
@@ -28,11 +58,40 @@ void Application::run() {
 }
 
 void Application::handleEvents() {
+    if (isTreeViewOpen) {
+        btnBack.update();
+        if (btnBack.get_is_hovered()) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+        else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+
+        if (btnBack.is_clicked()) {
+            isTreeViewOpen = false;
+            treeScrollOffset = 0;
+        }
+
+        float wheel = GetMouseWheelMove();
+        if (wheel != 0) {
+            const int nodeSpacing = 179;  
+            const int lastNodeH = 155;   
+            const int contentTopPad = 10;
+            const int bottomPad = 20;
+            int n = (int)solutionPath.size();
+            int totalHeight = contentTopPad + (n - 1) * nodeSpacing + lastNodeH + bottomPad;
+            int viewHeight = screenHeight - 60;
+            int maxScroll = std::max(0, totalHeight - viewHeight);
+            treeScrollOffset -= (int)(wheel * 40);
+            if (treeScrollOffset < 0) treeScrollOffset = 0;
+            if (treeScrollOffset > maxScroll) treeScrollOffset = maxScroll;
+        }
+        return;
+    }
+
     btnInput.update();
     btnShuffle.update();
     btnSolve.update();
+    if (isSolved && !solutionPath.empty() && !isAnimating) btnShowTree.update();
 
-    bool anyHovered = btnInput.get_is_hovered() || btnShuffle.get_is_hovered() || btnSolve.get_is_hovered();
+    bool anyHovered = btnInput.get_is_hovered() || btnShuffle.get_is_hovered() ||
+                      btnSolve.get_is_hovered() || btnShowTree.get_is_hovered();
     if (anyHovered && !isModalOpen) {
         SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
     }
@@ -65,6 +124,11 @@ void Application::handleEvents() {
             isProcessing = true;
             isSolved = false;
             futureSolution = std::async(std::launch::async, &Solver::solve_bfs, &solver, puzzle);
+        }
+
+        if (isSolved && !solutionPath.empty() && !isAnimating && btnShowTree.is_clicked()) {
+            isTreeViewOpen = true;
+            treeScrollOffset = 0;
         }
     }
 }
@@ -163,17 +227,24 @@ void Application::renderSidebar() {
     btnSolve.draw();
 
     if (isSolved) {
-        std::string statesText = "Tested States: " + std::to_string(testedStates);
+        std::string statesText = lang.testedStates + std::to_string(testedStates);
         DrawText(statesText.c_str(), 25, 260, 20, DARKGRAY);
 
         if (solutionPath.empty()) {
-            DrawText("UNSOLVABLE", 25, 290, 20, RED);
+            DrawText(lang.unsolvable.c_str(), 25, 290, 20, RED);
+        }
+        else if (!isAnimating) {
+            std::string stepsText = lang.steps + std::to_string((int)solutionPath.size() - 1);
+            DrawText(stepsText.c_str(), 25, 285, 20, DARKGRAY);
+            btnShowTree.draw();
         }
     }
 
     if (isProcessing) {
-        DrawText("Processing...", 25, 260, 20, DARKBLUE);
+        DrawText(lang.processing.c_str(), 25, 260, 20, DARKBLUE);
     }
+
+    renderFlags();
 }
 
 void Application::renderBoard() {
@@ -202,21 +273,159 @@ void Application::renderBoard() {
 void Application::renderModal() {
     DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.8f));
     DrawRectangle(screenWidth / 2 - 200, screenHeight / 2 - 100, 400, 200, RAYWHITE);
-    DrawText("Enter 9 unique digits (0-8):", screenWidth / 2 - 180, screenHeight / 2 - 80, 20, DARKGRAY);
+    DrawText(lang.modalPrompt.c_str(), screenWidth / 2 - 180, screenHeight / 2 - 80, 20, DARKGRAY);
     DrawText(inputText.c_str(), screenWidth / 2 - 180, screenHeight / 2 - 20, 40, DARKBLUE);
-    DrawText("Press ENTER to confirm or ESC to cancel", screenWidth / 2 - 180, screenHeight / 2 + 50, 15, GRAY);
+    DrawText(lang.modalHint.c_str(), screenWidth / 2 - 180, screenHeight / 2 + 50, 15, GRAY);
+}
+
+void Application::renderFlags() {
+    const int fw = 45, fh = 30;
+    const int gap = 10;
+    const int totalW = fw * 2 + gap;
+    const int fx = (sidebarWidth - totalW) / 2;
+    const int fy = screenHeight - fh - 15;
+
+    Rectangle rectBR = { (float)fx, (float)fy, (float)fw, (float)fh };
+    Rectangle rectUS = { (float)(fx + fw + gap), (float)fy, (float)fw, (float)fh };
+
+    DrawRectangleRec(rectBR, { 0, 156, 59, 255 });
+    Vector2 diamond[4] = {
+        { rectBR.x + fw / 2.0f, rectBR.y + 2 },
+        { rectBR.x + fw - 4,    rectBR.y + fh / 2.0f },
+        { rectBR.x + fw / 2.0f, rectBR.y + fh - 2 },
+        { rectBR.x + 4,         rectBR.y + fh / 2.0f }
+    };
+    DrawTriangle(diamond[0], diamond[1], diamond[3], { 255, 220, 0, 255 });
+    DrawTriangle(diamond[1], diamond[2], diamond[3], { 255, 220, 0, 255 });
+    DrawCircle((int)(rectBR.x + fw / 2), (int)(rectBR.y + fh / 2), 7, { 0, 56, 168, 255 });
+
+    DrawRectangleRec(rectUS, { 178, 34, 52, 255 });
+    for (int s = 0; s < 4; s++) {
+        int sy = (int)(rectUS.y + s * (fh / 4.0f) + fh / 8.0f - 1);
+        DrawRectangle((int)rectUS.x, sy, fw, 3, RAYWHITE);
+    }
+    DrawRectangle((int)rectUS.x, (int)rectUS.y, fw / 2, fh / 2, { 0, 40, 104, 255 });
+
+    if (currentLang == Language::PT)
+        DrawRectangleLinesEx(rectBR, 2, WHITE);
+    else
+        DrawRectangleLinesEx(rectUS, 2, WHITE);
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        Vector2 mouse = GetMousePosition();
+        if (CheckCollisionPointRec(mouse, rectBR)) setLanguage(Language::PT);
+        if (CheckCollisionPointRec(mouse, rectUS)) setLanguage(Language::EN);
+    }
 }
 
 void Application::render() {
     BeginDrawing();
-    ClearBackground(RAYWHITE);
 
-    renderSidebar();
-    renderBoard();
+    if (isTreeViewOpen) {
+        renderTreeView();
+    }
+    else {
+        ClearBackground(RAYWHITE);
+        renderSidebar();
+        renderBoard();
 
-    if (isModalOpen) {
-        renderModal();
+        if (isModalOpen) {
+            renderModal();
+        }
     }
 
     EndDrawing();
+}
+
+void Application::renderTreeView() {
+    ClearBackground(RAYWHITE);
+
+    DrawRectangle(0, 0, screenWidth, 60, DARKBLUE);
+    std::string title = lang.treeTitle + "  |  " +
+                        std::to_string((int)solutionPath.size() - 1) + " " + lang.treeMoves + "  |  " +
+                        std::to_string(testedStates) + " " + lang.treeStatesTested;
+    DrawText(title.c_str(), 15, 20, 19, WHITE);
+    btnBack.draw();
+
+    const int miniCell = 40;
+    const int boardPx = miniCell * 3;       
+    const int borderPad = 4;                 
+    const int labelH = 22;                   
+    const int labelGap = 5;                 
+    const int boardBlockH = boardPx + borderPad * 2; 
+    const int arrowH = 24;                  
+    const int nodeSpacing = labelH + labelGap + boardBlockH + arrowH;
+
+    int boardX = (screenWidth - boardPx) / 2;
+    int headerH = 60;
+    int contentStartY = headerH + 10;
+    int n = (int)solutionPath.size();
+
+    BeginScissorMode(0, headerH, screenWidth, screenHeight - headerH);
+
+    for (int i = 0; i < n; i++) {
+        int baseY = contentStartY + i * nodeSpacing - treeScrollOffset;
+        int boardBorderY = baseY + labelH + labelGap;
+        int boardY = boardBorderY + borderPad;
+
+        if (boardBorderY + boardBlockH < headerH || baseY > screenHeight) continue;
+
+        std::string label;
+        Color labelColor;
+        if (i == 0) { label = lang.nodeInitial; labelColor = DARKBLUE; }
+        else if (i == n - 1) { label = lang.nodeGoal; labelColor = DARKGREEN; }
+        else { label = lang.nodeStep + " " + std::to_string(i); labelColor = DARKGRAY; }
+
+        int labelW = MeasureText(label.c_str(), 18);
+        DrawText(label.c_str(), (screenWidth - labelW) / 2, baseY, 18, labelColor);
+
+        Color borderColor = (i == 0) ? DARKBLUE : (i == n - 1) ? DARKGREEN : DARKBLUE;
+        DrawRectangle(boardX - borderPad, boardBorderY, boardPx + borderPad * 2, boardBlockH, borderColor);
+
+        const auto& state = solutionPath[i].get_board();
+        for (int j = 0; j < 9; j++) {
+            int row = j / 3, col = j % 3;
+            int val = state[j];
+            int cx = boardX + col * miniCell;
+            int cy = boardY + row * miniCell;
+
+            if (val != 0) {
+                Color tileColor = (i == n - 1) ? DARKGREEN : DARKBLUE;
+                DrawRectangle(cx + 2, cy + 2, miniCell - 4, miniCell - 4, tileColor);
+                std::string t = std::to_string(val);
+                int tw = MeasureText(t.c_str(), 20);
+                DrawText(t.c_str(), cx + (miniCell - tw) / 2, cy + (miniCell - 20) / 2, 20, WHITE);
+            }
+            else {
+                DrawRectangle(cx + 2, cy + 2, miniCell - 4, miniCell - 4, RAYWHITE);
+            }
+        }
+
+        if (i < n - 1) {
+            int ax = screenWidth / 2;
+            int ay1 = boardBorderY + boardBlockH + 2;
+            int ay2 = baseY + nodeSpacing - 8;
+            DrawLineEx({ (float)ax, (float)ay1 }, { (float)ax, (float)ay2 }, 2.0f, DARKGRAY);
+            DrawTriangle(
+                { (float)ax, (float)(ay2 + 8) },
+                { (float)(ax - 7), (float)ay2 },
+                { (float)(ax + 7), (float)ay2 },
+                DARKGRAY
+            );
+        }
+    }
+
+    EndScissorMode();
+
+    int contentTopPad = contentStartY - headerH;  
+    int totalHeight = contentTopPad + (n - 1) * nodeSpacing + (labelH + labelGap + boardBlockH) + 20;
+    int viewHeight = screenHeight - headerH;
+    if (totalHeight > viewHeight) {
+        float ratio = (float)viewHeight / totalHeight;
+        int sbH = std::max(20, (int)(ratio * viewHeight));
+        float scrollRatio = (float)treeScrollOffset / std::max(1, totalHeight - viewHeight);
+        int sbY = headerH + (int)(scrollRatio * (viewHeight - sbH));
+        DrawRectangle(screenWidth - 8, headerH, 8, viewHeight, LIGHTGRAY);
+        DrawRectangle(screenWidth - 8, sbY, 8, sbH, DARKGRAY);
+    }
 }

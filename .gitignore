@@ -2,6 +2,7 @@ build/
 out/
 .vscode/
 .vs/
+.claude/
 dist/
 
 *.o

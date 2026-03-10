@@ -19,6 +19,7 @@ public:
 	bool is_clicked();
 	void draw() const;
 	void set_disabled(bool disabled);
+	void set_text(const std::string& text);
 	bool get_is_hovered() const;
 	void update();
 };

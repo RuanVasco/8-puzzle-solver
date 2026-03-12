@@ -24,8 +24,8 @@ Application::Application()
     btnInput(25, 50, 200, 50, "Set Initial State"),
     btnShuffle(25, 120, 200, 50, "Shuffle"),
     btnSolve(25, 190, 200, 50, "Solve", DARKGREEN, GREEN, GRAY),
-    btnShowTree(25, 335, 200, 50, "Ver Arvore", DARKBLUE, BLUE, GRAY),
-    btnBack(screenWidth - 130, 10, 110, 40, "Voltar", DARKGRAY, GRAY, DARKGRAY),
+    btnShowTree(25, 335, 200, 50, "View Tree", DARKBLUE, BLUE, GRAY),
+    btnBack(screenWidth - 130, 10, 110, 40, "Back", DARKGRAY, GRAY, DARKGRAY),
     isAnimating(false), isProcessing(false), isSolved(false), isModalOpen(false),
     isTreeViewOpen(false), currentStep(0), framesCounter(0), testedStates(0),
     treeScrollOffset(0), currentLang(Language::PT), lang(LANG_PT) {
@@ -33,6 +33,7 @@ Application::Application()
     InitWindow(screenWidth, screenHeight, "8 Puzzle Solver");
     SetTargetFPS(60);
     SetExitKey(KEY_NULL);
+    setLanguage(Language::PT);
 }
 
 Application::~Application() {

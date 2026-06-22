@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from .pipeline import DataPipeline
-from .split import train_test_split_by_season
-from .baseline import train_baseline, evaluate_baseline
-from .logistic import train_logistic, evaluate_logistic
-from .forest import train_forest, evaluate_forest
-from .naive_bayes import train_naive_bayes, evaluate_naive_bayes
-from .knn import train_knn, evaluate_knn
+from .data.pipeline import DataPipeline
+from .data.split import train_test_split_by_season
+from .models.baseline import train_baseline, evaluate_baseline
+from .models.logistic import train_logistic, evaluate_logistic
+from .models.forest import train_forest, evaluate_forest
+from .models.naive_bayes import train_naive_bayes, evaluate_naive_bayes
+from .models.knn import train_knn, evaluate_knn
 from .evaluation import report_and_plot
 
 # Caminhos ancorados no próprio arquivo, não no diretório de execução,

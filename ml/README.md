@@ -189,13 +189,15 @@ ml/
 ├── datasets/processed/      # saída tratada (ignorada no git)
 ├── reports/                 # gráficos (matriz de confusão)
 ├── src/
-│   ├── pipeline.py          # limpeza, criação do alvo, encoding, X/y
-│   ├── split.py             # divisão treino/teste por temporada
-│   ├── baseline.py          # DummyClassifier (régua)
-│   ├── logistic.py          # Regressão Logística
-│   ├── forest.py            # Random Forest
-│   ├── naive_bayes.py       # Naïve Bayes
-│   ├── knn.py               # KNN
+│   ├── data/                # preparação dos dados
+│   │   ├── pipeline.py      # limpeza, criação do alvo, encoding, X/y
+│   │   └── split.py         # divisão treino/teste por temporada
+│   ├── models/              # algoritmos de classificação
+│   │   ├── baseline.py      # DummyClassifier (régua)
+│   │   ├── logistic.py      # Regressão Logística
+│   │   ├── forest.py        # Random Forest
+│   │   ├── naive_bayes.py   # Naïve Bayes
+│   │   └── knn.py           # KNN
 │   ├── evaluation.py        # matriz de confusão + relatório por classe
 │   └── main.py              # orquestra todo o fluxo
 └── requirements.txt

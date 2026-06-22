@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -32,12 +33,17 @@ ONEHOT_COLS = ['league_id']  # apenas 7 ligas
 # one-hot. 'referee' tem ~619 valores distintos.
 FREQUENCY_COLS = ['referee']
 
-# Alvos (o que queremos prever): os gols de cada lado.
-TARGET_COLS = ['home_score', 'away_score']
+# Placares brutos: usados para DERIVAR o alvo de resultado e depois descartados
+# (mantê-los como feature seria vazamento total — eles são a própria resposta).
+SCORE_COLS = ['home_score', 'away_score']
+
+# Alvo: o RESULTADO da partida (classificação), codificado como:
+#   0 = vitória do mandante | 1 = empate | 2 = vitória do visitante
+TARGET_COL = 'result'
 
 
 class DataPipeline:
-    """Carrega e prepara os dados de partidas para o treinamento de previsão de placar."""
+    """Carrega e prepara os dados de partidas para o treinamento de previsão de resultado."""
 
     def __init__(self, matches_path: Path):
         """Lê o CSV de partidas para um DataFrame ao criar o objeto.
@@ -58,7 +64,27 @@ class DataPipeline:
         Returns:
             self, para permitir encadeamento (method chaining).
         """
-        self.matches_df = self.matches_df.dropna(subset=['home_score', 'away_score'])
+        self.matches_df = self.matches_df.dropna(subset=SCORE_COLS)
+        return self
+
+    def make_target(self):
+        """Cria o alvo de RESULTADO (0/1/2) a partir do placar e descarta os gols.
+
+        Comparando home_score x away_score, classificamos a partida em três
+        categorias: vitória do mandante (0), empate (1) ou vitória do visitante (2).
+        Os placares são removidos logo em seguida — usá-los como feature seria
+        vazamento total, já que são a própria resposta.
+
+        Returns:
+            self, para permitir encadeamento.
+        """
+        home, away = self.matches_df['home_score'], self.matches_df['away_score']
+        self.matches_df[TARGET_COL] = np.where(
+            home > away, 0,            # mandante vence
+            np.where(home == away, 1,  # empate
+                     2),               # visitante vence
+        )
+        self.matches_df = self.matches_df.drop(columns=SCORE_COLS)
         return self
 
     def format_types(self):
@@ -142,15 +168,14 @@ class DataPipeline:
     def split_features_target(self):
         """Separa o DataFrame em X (features) e y (alvo).
 
-        X recebe todas as colunas exceto os alvos; y recebe apenas home_score e
-        away_score (os gols que queremos prever). É a divisão "matéria" vs "resposta"
-        que o modelo usa para aprender.
+        X recebe todas as colunas exceto o alvo; y recebe apenas a coluna 'result'
+        (0/1/2). É a divisão "matéria" vs "resposta" que o modelo usa para aprender.
 
         Returns:
-            (X, y): DataFrame de features e DataFrame de alvos.
+            (X, y): DataFrame de features e Series do alvo.
         """
-        X = self.matches_df.drop(columns=TARGET_COLS)
-        y = self.matches_df[TARGET_COLS]
+        X = self.matches_df.drop(columns=[TARGET_COL])
+        y = self.matches_df[TARGET_COL]
         return X, y
 
     def save(self, output_path: Path):

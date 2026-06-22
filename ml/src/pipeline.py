@@ -17,19 +17,20 @@ REDUNDANT_COLS = [
     'match_id',
     'home_team_name', 'away_team_name',
     'league_name',
-    # TODO: experimentar mover 'referee' para cá. São 619 juízes diferentes
-    # (cardinalidade muito alta), o que pode atrapalhar mais que ajudar.
-    # Por ora mantemos como feature para testar se agrega algo.
 ]
 
-# Colunas categóricas: são rótulos (códigos de time/liga ou nome do juiz), não
-# quantidades. Precisam de encoding para o modelo não interpretá-las como números
-# ordenáveis (ex.: achar que o time 481 é "maior" que o time 50).
-CATEGORICAL_COLS = [
-    'league_id',
-    'home_team_id', 'away_team_id',
-    'referee',
-]
+# Identidade dos times: descartada porque o sinal que ela carrega (a força do
+# time) já está nas colunas de elo, de forma contínua e numa única coluna. Fazer
+# one-hot disso geraria ~920 colunas esparsas e redundantes com o elo.
+TEAM_ID_COLS = ['home_team_id', 'away_team_id']
+
+# Categóricas de BAIXA cardinalidade: poucas categorias, então one-hot é barato.
+ONEHOT_COLS = ['league_id']  # apenas 7 ligas
+
+# Categóricas de ALTA cardinalidade: viram UMA coluna via frequency encoding
+# (cada valor é trocado pelo nº de vezes que aparece). Evita a explosão do
+# one-hot. 'referee' tem ~619 valores distintos.
+FREQUENCY_COLS = ['referee']
 
 # Alvos (o que queremos prever): os gols de cada lado.
 TARGET_COLS = ['home_score', 'away_score']
@@ -84,35 +85,52 @@ class DataPipeline:
     def select_features(self):
         """Descarta colunas de vazamento (pós-jogo) e identificadores redundantes.
 
-        Mantém apenas informação conhecida ANTES da partida (elos, times,
-        contexto temporal/competição) junto com os alvos home_score/away_score.
-        Usa errors='ignore' para não quebrar caso alguma coluna já não exista.
+        Mantém apenas informação conhecida ANTES da partida (elos, contexto
+        temporal/competição, juiz) junto com os alvos home_score/away_score.
+        A identidade dos times (TEAM_ID_COLS) também sai: sua informação de força
+        já está no elo. Usa errors='ignore' para não quebrar se a coluna não existir.
 
         Returns:
             self, para permitir encadeamento.
         """
         self.matches_df = self.matches_df.drop(
-            columns=LEAKAGE_COLS + REDUNDANT_COLS,
+            columns=LEAKAGE_COLS + REDUNDANT_COLS + TEAM_ID_COLS,
             errors='ignore',
         )
         return self
 
+    def encode_frequencies(self):
+        """Codifica categóricas de alta cardinalidade pela sua frequência.
+
+        Cada valor (ex.: um juiz) é trocado pelo número de vezes que ele aparece
+        no dataset. Assim 619 juízes viram UMA coluna numérica, em vez de 619
+        colunas one-hot. O sinal capturado é indireto (juízes mais "rodados"
+        aparecem mais), mas é barato e não explode a dimensionalidade.
+
+        Observação: usa a contagem sobre todos os dados. Como é só contagem (não
+        envolve o alvo), o risco de vazamento é mínimo.
+
+        Returns:
+            self, para permitir encadeamento.
+        """
+        for col in FREQUENCY_COLS:
+            counts = self.matches_df[col].value_counts()
+            self.matches_df[col] = self.matches_df[col].map(counts)
+        return self
+
     def encode_categoricals(self):
-        """Converte as colunas categóricas em colunas numéricas via one-hot encoding.
+        """Aplica one-hot apenas nas categóricas de BAIXA cardinalidade (ONEHOT_COLS).
 
-        Para cada valor distinto (cada time, liga ou juiz) o pandas cria uma coluna
-        0/1 do tipo "é esse valor? sim(1)/não(0)". Assim o modelo deixa de tratar os
-        códigos como quantidades ordenáveis e passa a vê-los como categorias.
-
-        Atenção: gera muitas colunas (alta cardinalidade em times e juízes). É o ponto
-        de partida didático; depois dá para comparar com técnicas mais enxutas.
+        Para cada valor distinto cria uma coluna 0/1 ("é esse valor? sim/não"), o
+        que evita o modelo tratar códigos como números ordenáveis. Só usamos aqui
+        em colunas com poucas categorias (ex.: as 7 ligas), onde o custo é baixo.
 
         Returns:
             self, para permitir encadeamento.
         """
         self.matches_df = pd.get_dummies(
             self.matches_df,
-            columns=CATEGORICAL_COLS,
+            columns=ONEHOT_COLS,
             dtype=int,  # gera 0/1 inteiros em vez de True/False
         )
         return self

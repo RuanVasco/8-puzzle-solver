@@ -17,16 +17,20 @@ ml/
 │   └── processed/            # saída tratada (gerada pelo pipeline)
 │       └── matches_clean.csv
 ├── src/
-│   └── main.py               # pipeline de tratamento dos dados
+│   ├── __init__.py
+│   ├── pipeline.py           # classe DataPipeline (lógica de tratamento)
+│   └── main.py               # ponto de entrada (orquestra o pipeline)
 ├── requirements.txt
 └── README.md
 ```
 
 ## Como rodar
 
+A partir da raiz do projeto (`ml/`):
+
 ```bash
 pip install -r requirements.txt
-python src/main.py
+python -m src.main
 ```
 
 O script lê `datasets/raw/matches.csv`, aplica o tratamento e grava o resultado em
@@ -34,7 +38,7 @@ O script lê `datasets/raw/matches.csv`, aplica o tratamento e grava o resultado
 
 ## O que o pipeline faz
 
-As etapas em [`src/main.py`](src/main.py) (classe `DataPipeline`) são encadeadas nesta ordem:
+As etapas em [`src/pipeline.py`](src/pipeline.py) (classe `DataPipeline`) são encadeadas nesta ordem:
 
 | Etapa | Método | Descrição |
 |---|---|---|

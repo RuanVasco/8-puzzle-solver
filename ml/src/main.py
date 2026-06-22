@@ -7,12 +7,14 @@ from .logistic import train_logistic, evaluate_logistic
 from .forest import train_forest, evaluate_forest
 from .naive_bayes import train_naive_bayes, evaluate_naive_bayes
 from .knn import train_knn, evaluate_knn
+from .evaluation import report_and_plot
 
 # Caminhos ancorados no próprio arquivo, não no diretório de execução,
 # pra funcionar de qualquer lugar que o script seja rodado.
 BASE_DIR = Path(__file__).resolve().parent.parent   # raiz do projeto (.../ml)
 RAW_DIR = BASE_DIR / "datasets" / "raw"              # CSVs originais (não mexer)
 PROCESSED_DIR = BASE_DIR / "datasets" / "processed"  # saída já tratada
+REPORTS_DIR = BASE_DIR / "reports"                   # gráficos/relatórios
 
 
 if __name__ == "__main__":
@@ -55,3 +57,11 @@ if __name__ == "__main__":
     knn = train_knn(X_train, y_train)
     acc_knn = evaluate_knn(knn, X_test, y_test)
     print(f"[KNN]                            acurácia: {acc_knn:.3f}")
+
+    # Passo 6: avaliação detalhada do modelo campeão (Logística): relatório por
+    # classe e matriz de confusão salva como imagem para o artigo.
+    report_and_plot(
+        logistic, X_test, y_test,
+        title="Matriz de Confusão - Regressão Logística",
+        save_path=REPORTS_DIR / "confusion_logistic.png",
+    )

@@ -1,35 +1,174 @@
-# Previsão de Placar — Futebol
+# Previsão do Resultado de Partidas de Futebol via Mineração de Dados
 
-Projeto de Machine Learning para **prever o placar de partidas de futebol** a partir de
-informações conhecidas *antes* do jogo (força dos times via elo, competição, contexto
-temporal). Inclui o pipeline de tratamento dos dados e uma escada de modelos baseline.
+> **Rascunho do artigo** (Trabalho Final — Mineração de Dados Aplicada).
+> Segue a estrutura sugerida no enunciado (template SBC). Os blocos marcados com
+> `> TODO` precisam ser completados/escritos no artigo final.
+> Processo conduzido segundo o **KDD** (Knowledge Discovery in Databases).
 
-## Fonte dos dados
+> TODO: autores (grupo de 2), instituição, e-mails (template SBC).
 
-O dataset (`matches.csv`) foi extraído do sistema do **[futmetricas.com.br](https://futmetricas.com.br)**.
+---
 
-## Estrutura do projeto
+## 1. Introdução
 
-```
-ml/
-├── datasets/
-│   ├── raw/                  # dados originais, não editar
-│   │   └── matches.csv
-│   └── processed/            # saída tratada (gerada pelo pipeline, ignorada no git)
-│       └── matches_clean.csv
-├── src/
-│   ├── __init__.py
-│   ├── pipeline.py           # DataPipeline: limpeza, encoding, X/y
-│   ├── split.py              # separação treino/teste por temporada
-│   ├── baseline.py           # nível 0: DummyRegressor (sempre a média)
-│   ├── poisson.py            # nível 1: regressão de Poisson + StandardScaler
-│   ├── xgb_model.py          # nível 2: XGBoost
-│   └── main.py               # ponto de entrada (orquestra tudo)
-├── requirements.txt
-└── README.md
-```
+**Contextualização.** Prever o resultado de partidas de futebol é um problema
+clássico de análise esportiva, com aplicações em jornalismo, clubes e mercado de
+apostas. O resultado, porém, tem forte componente de aleatoriedade, o que o torna
+um bom estudo de caso para mineração de dados.
 
-## Como rodar
+**Motivação.** Estimar, *antes* do jogo, o resultado mais provável a partir de
+informações objetivas (força das equipes, mando de campo, competição).
+
+**Objetivo de negócio.** Auxiliar analistas/apostadores a estimar o resultado
+mais provável de uma partida antes de ela acontecer.
+
+**Objetivo de mineração.** Treinar um modelo de **classificação** que, a partir de
+atributos conhecidos antes do jogo, prevê a classe do resultado:
+*vitória do mandante (0)*, *empate (1)* ou *vitória do visitante (2)*.
+
+**Organização.** A Seção 2 traz o referencial teórico; a Seção 3 detalha a
+metodologia (dados, preparação e modelagem); a Seção 4 apresenta resultados e
+discussão; a Seção 5 conclui e aponta trabalhos futuros.
+
+---
+
+## 2. Referencial Teórico e Trabalhos Correlatos
+
+- **KDD**: processo de descoberta de conhecimento em bases de dados (seleção,
+  pré-processamento, transformação, mineração e interpretação).
+- **Classificação**: tarefa de prever uma categoria. Algoritmos usados: Regressão
+  Logística, Random Forest, Naïve Bayes e KNN.
+- **Sistema de rating Elo**: medida contínua de força de uma equipe, usada aqui
+  como principal atributo preditivo.
+
+> TODO: citar trabalhos correlatos (ex.: modelo de Poisson de Maher; Dixon-Coles
+> para previsão de placares) e referências formais no padrão SBC.
+
+---
+
+## 3. Metodologia
+
+### 3.1 Compreensão dos Dados
+
+- **Fonte.** Dados extraídos do sistema do **[futmetricas.com.br](https://futmetricas.com.br)**.
+- **Volume.** 6.063 partidas e 27 atributos no arquivo bruto (`matches.csv`).
+- **Tipos de variáveis.** Numéricas (placar, posse, chutes, elo...), categóricas
+  (times, liga, árbitro) e temporais (data, temporada).
+- **Concentração temporal.** A base é majoritariamente de 2022 a 2026 (2010 e
+  2018 aparecem com 1–2 jogos, descartáveis como ruído).
+
+**Análise exploratória — problemas identificados:**
+
+| Achado | Decisão |
+|---|---|
+| Dataset auxiliar `teams.csv` com +92% de valores ausentes | Descartado |
+| Atributos pós-jogo (posse, chutes, cartões, escanteios, faltas) | Removidos (vazamento) |
+| Identificadores e nomes redundantes (`match_id`, `*_team_name`, `league_name`) | Removidos |
+| Identidade dos times redundante com o elo | Substituída pelo elo |
+| **Desbalanceamento de classes**: mandante vence ~46% das vezes | Considerado na avaliação |
+
+### 3.2 Preparação dos Dados
+
+1. **Limpeza** — remoção de partidas sem placar (alvo).
+2. **Criação do alvo** — `result` (0/1/2) derivado da comparação dos placares; os
+   placares são então descartados (seriam vazamento).
+3. **Valores ausentes** — preenchimento neutro em colunas não-alvo
+   (`referee` → "Unknown", `round_number` → 0).
+4. **Codificação de categóricas** (por cardinalidade):
+   - times: **descartados** (redundantes com o elo);
+   - `referee` (alta cardinalidade, ~619 valores): **frequency encoding** (1 coluna);
+   - `league_id` (7 ligas): **one-hot encoding**.
+5. **Padronização** — `StandardScaler` (média 0, desvio 1) nos modelos sensíveis a
+   escala, para o elo (~1500) não dominar as demais features.
+6. **Divisão treino/teste** — **por temporada** (não aleatória): treino até 2024,
+   teste em 2025–2026. Evita vazamento temporal (treinar no passado, testar no
+   futuro). Resultado: 4.061 jogos de treino e 1.963 de teste, com 13 atributos.
+
+> Resultado da preparação: de ~1.550 colunas (com one-hot em tudo) para **13**,
+> sem perda relevante de performance — confirmando a redundância dos times.
+
+### 3.3 Modelagem
+
+- **Ferramentas/bibliotecas.** Python, pandas, scikit-learn, matplotlib.
+- **Algoritmos** (classificação) e justificativa:
+  - **Regressão Logística** — baseline linear; estima a probabilidade de cada classe.
+  - **Random Forest** — comitê de árvores, robusto a ruído.
+  - **Naïve Bayes** — probabilístico, rápido (assume independência das features).
+  - **KNN** — classifica pelos jogos mais parecidos.
+  - **DummyClassifier** (classe mais comum) — baseline ingênuo / régua mínima.
+- **Estratégia de validação.** Avaliação em conjunto de teste temporal separado
+  (out-of-time). Métrica principal: **acurácia**; análise complementar com
+  **matriz de confusão** e **precision/recall/F1** por classe.
+
+> TODO: incluir ajuste de hiperparâmetros (grid/random search) e validação cruzada
+> temporal como aprofundamento.
+
+---
+
+## 4. Resultados e Discussão
+
+**Acurácia no conjunto de teste:**
+
+| Modelo | Acurácia |
+|---|---|
+| **Regressão Logística** | **0.483** |
+| Random Forest | 0.476 |
+| Baseline (classe mais comum) | 0.463 |
+| KNN | 0.452 |
+| Naïve Bayes | 0.418 |
+
+Apenas **Regressão Logística** e **Random Forest** superam o baseline ingênuo
+(0.463). KNN e Naïve Bayes ficam abaixo — coerente: o Naïve Bayes é penalizado
+por assumir independência entre features correlacionadas (elos de mandante e
+visitante), e o KNN sofre com a aleatoriedade ("jogos parecidos" nem sempre têm o
+mesmo desfecho).
+
+**Matriz de confusão (Regressão Logística):**
+
+![Matriz de confusão da Regressão Logística](reports/confusion_logistic.png)
+
+| Real ↓ / Previsto → | Mandante | Empate | Visitante |
+|---|---|---|---|
+| **Mandante** | 794 | 3 | 112 |
+| **Empate** | 428 | 1 | 118 |
+| **Visitante** | 353 | 0 | 154 |
+
+**Análise crítica.** A acurácia de ~48% esconde o achado mais importante: o modelo
+**quase nunca prevê empate** (recall do empate ≈ 0.2%, apenas 1 de 547 acertos).
+Ele concentra os palpites em "mandante vence" (recall 87%). Isso reflete o
+**desbalanceamento** e a natureza notoriamente imprevisível do empate no futebol.
+A acurácia, sozinha, mascararia esse comportamento — daí a importância da matriz de
+confusão.
+
+**Limitações.** Conjunto pequeno de atributos pré-jogo (essencialmente o elo);
+ausência de variáveis como escalações, lesões, sequência de resultados e mando
+real (viagem/altitude). Placar exato havia se mostrado ainda mais difícil, o que
+motivou a reformulação do problema como classificação de resultado.
+
+---
+
+## 5. Conclusões e Trabalhos Futuros
+
+**Conclusões.** Foi possível conduzir o processo completo de KDD e construir
+modelos que superam (modestamente) o baseline. O sinal preditivo é dominado por um
+componente linear simples (elo + mando de campo), e modelos mais complexos não
+trouxeram ganho — indicando que o gargalo está nos **atributos**, não no algoritmo.
+
+**Atendimento aos objetivos.** O objetivo de mineração (classificar o resultado)
+foi atingido; o de negócio é parcialmente atendido, dado o teto de previsibilidade
+do futebol.
+
+**Lições aprendidas.** Importância de evitar vazamento de dados; valor dos
+baselines como régua; e que acurácia isolada pode enganar em classes
+desbalanceadas.
+
+**Trabalhos futuros.** Engenharia de novos atributos (diferença de elo, forma
+recente, distância de viagem); tratamento do desbalanceamento (reamostragem,
+pesos por classe); ajuste de hiperparâmetros; e validação cruzada temporal.
+
+---
+
+## Como rodar (reprodutibilidade)
 
 A partir da raiz do projeto (`ml/`):
 
@@ -38,78 +177,26 @@ pip install -r requirements.txt
 python -m src.main
 ```
 
-O script lê `datasets/raw/matches.csv`, trata os dados, grava a versão limpa em
-`datasets/processed/` e treina/avalia os modelos, imprimindo o MAE de cada um.
+O script trata os dados (`datasets/raw/matches.csv`), salva a versão processada em
+`datasets/processed/`, treina/avalia os modelos e gera a matriz de confusão em
+`reports/`.
 
-## O que o pipeline faz
+### Estrutura do projeto
 
-As etapas em [`src/pipeline.py`](src/pipeline.py) (classe `DataPipeline`) são encadeadas nesta ordem:
-
-| Etapa | Método | Descrição |
-|---|---|---|
-| 1 | `clean_targets()` | Remove partidas sem placar (sem alvo não há o que treinar). |
-| 2 | `format_types()` | Converte `match_date` de texto para datetime. |
-| 3 | `fill_missing()` | Preenche nulos em colunas não-alvo com valores neutros. |
-| 4 | `select_features()` | Descarta colunas de vazamento, redundantes e a identidade dos times. |
-| 5 | `encode_frequencies()` | Frequency encoding nas categóricas de alta cardinalidade (`referee`). |
-| 6 | `encode_categoricals()` | One-hot apenas nas de baixa cardinalidade (`league_id`). |
-| 7 | `save()` | Grava o resultado em `datasets/processed/`. |
-| — | `split_features_target()` | Separa X (features) de y (alvos `home_score`/`away_score`). |
-
-## Decisões de modelagem
-
-### Vazamento de dados (data leakage)
-
-Estatísticas que só existem **depois** da partida (posse de bola, chutes a gol, cartões,
-escanteios, faltas) são **removidas**. Usá-las para prever o placar seria trapaça: no
-momento real da previsão, antes do jogo, esses valores não existem.
-
-### Colunas redundantes / sem sinal
-
-São descartados identificadores puros (`match_id`) e nomes redundantes com seus códigos
-(`home_team_name`, `away_team_name`, `league_name`).
-
-### Encoding de categóricas (por cardinalidade)
-
-A estratégia depende de quantos valores distintos a coluna tem:
-
-- **Identidade dos times** (`home_team_id`, `away_team_id`): **descartada**. O sinal que
-  ela carrega (a força do time) já está nas colunas de **elo**, de forma contínua e numa
-  única coluna. Fazer one-hot geraria ~920 colunas esparsas e redundantes.
-- **Alta cardinalidade** (`referee`, ~619 valores): **frequency encoding** — cada valor
-  vira o número de vezes que aparece, condensando tudo em uma coluna.
-- **Baixa cardinalidade** (`league_id`, 7 ligas): **one-hot encoding**, barato neste caso.
-
-> Resultado: o dataset sai de ~1550 colunas (com one-hot em tudo) para ~15, com
-> praticamente a mesma performance — confirmando que o one-hot dos times era redundante.
-
-### Separação treino/teste por tempo
-
-Como os dados são temporais, o corte é **por temporada** (`src/split.py`), não aleatório:
-treino com as temporadas mais antigas, teste com as mais recentes (`2025`, `2026`). Isso
-simula o uso real (prever o futuro a partir do passado) e evita vazamento temporal.
-
-### Modelos (escada de baselines)
-
-| Nível | Modelo | Papel |
-|---|---|---|
-| 0 | `DummyRegressor` (média) | régua mínima — qualquer modelo precisa superá-la |
-| 1 | `PoissonRegressor` + `StandardScaler` | baseline sério (gol é contagem → Poisson) |
-| 2 | `XGBoost` (`count:poisson`) | modelo forte, candidato a campeão |
-
-Métrica: **MAE** (erro médio em gols). Resultado atual no teste:
-
-| Modelo | MAE geral |
-|---|---|
-| Nível 0 (média) | 0.862 |
-| **Nível 1 (Poisson)** | **0.850** ✅ |
-| Nível 2 (XGBoost) | 0.872 (overfitting) |
-
-O Poisson é o melhor por ora. O XGBoost ficou pior até que o baseline — sinal de
-sobreajuste com poucas features, esperado num alvo tão ruidoso quanto placar de futebol.
-
-### Pontos em aberto (TODO)
-
-- Avaliar a remoção de `referee` (sinal fraco) ou outras formas de encoding.
-- Domar o XGBoost (regularização) e reavaliar quando houver mais features.
-- O dataset `teams.csv` foi descartado por estar +92% vazio (sem valor para o treino).
+```
+ml/
+├── datasets/raw/            # dados originais
+├── datasets/processed/      # saída tratada (ignorada no git)
+├── reports/                 # gráficos (matriz de confusão)
+├── src/
+│   ├── pipeline.py          # limpeza, criação do alvo, encoding, X/y
+│   ├── split.py             # divisão treino/teste por temporada
+│   ├── baseline.py          # DummyClassifier (régua)
+│   ├── logistic.py          # Regressão Logística
+│   ├── forest.py            # Random Forest
+│   ├── naive_bayes.py       # Naïve Bayes
+│   ├── knn.py               # KNN
+│   ├── evaluation.py        # matriz de confusão + relatório por classe
+│   └── main.py              # orquestra todo o fluxo
+└── requirements.txt
+```

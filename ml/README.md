@@ -235,3 +235,13 @@ ml/
 │   └── main.py              # orquestra todo o fluxo
 └── requirements.txt
 ```
+
+---
+
+> **TODO (resolver depois do merge).** O merge trouxe duas abordagens de ajuste de
+> hiperparâmetros convivendo no código: (1) o módulo central `src/models/tuning.py`
+> (saída "DEFAULT vs. TUNED" + `reports/confusion_best_tuned.png`), vindo do remoto,
+> e (2) o toggle `TUNE_HYPERPARAMS` em `main.py` + parâmetro `tune` em cada modelo
+> (`logistic.py`, `forest.py`, `knn.py`, `naive_bayes.py`), feito localmente.
+> Decidir qual manter, remover a duplicação e alinhar o `main.py` com a abordagem
+> escolhida.

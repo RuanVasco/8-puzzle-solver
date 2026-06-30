@@ -33,16 +33,20 @@ MODEL_CONFIGS = {
     "Logistic Regression": {
         "pipeline": make_pipeline(
             StandardScaler(),
-            LogisticRegression(max_iter=1000),
+            LogisticRegression(max_iter=1000, class_weight="balanced"),
         ),
         "param_grid": {
             "logisticregression__C": [0.01, 0.1, 1, 10, 100],
-            "logisticregression__solver": ["lbfgs", "liblinear"],
+            # 'liblinear' não suporta classificação multiclasse (3 classes);
+            # mantemos só solvers multinomiais.
+            "logisticregression__solver": ["lbfgs", "newton-cg"],
         },
     },
     "Random Forest": {
         # Árvores não precisam de padronização.
-        "pipeline": RandomForestClassifier(random_state=42, n_jobs=-1),
+        "pipeline": RandomForestClassifier(
+            random_state=42, n_jobs=-1, class_weight="balanced",
+        ),
         "param_grid": {
             "n_estimators": [100, 300, 500],
             "max_depth": [5, 8, 12, None],
@@ -74,7 +78,7 @@ def _numeric_features(X):
     return X.select_dtypes(include="number")
 
 
-def tune_model(name, X_train, y_train, n_splits=5, scoring="accuracy"):
+def tune_model(name, X_train, y_train, n_splits=5, scoring="balanced_accuracy"):
     """Roda GridSearchCV para um modelo e retorna o melhor estimador.
 
     Args:

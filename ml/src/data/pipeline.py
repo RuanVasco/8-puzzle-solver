@@ -125,6 +125,25 @@ class DataPipeline:
         )
         return self
 
+    def add_elo_features(self):
+        """Cria features derivadas do elo que ajudam a separar empates.
+
+        - elo_diff (mandante - visitante): resume o desequilíbrio de força numa
+          única coluna; o sinal aponta o favorito.
+        - elo_diff_abs (módulo): captura o EQUILÍBRIO em si — quanto mais perto
+          de zero, mais parelho o jogo e maior a chance de empate. Essa relação
+          é não-monotônica (o empate "pico" fica no meio), então o módulo é
+          essencial para modelos lineares conseguirem enxergar o empate.
+
+        Returns:
+            self, para permitir encadeamento.
+        """
+        self.matches_df['elo_diff'] = (
+            self.matches_df['home_elo_before'] - self.matches_df['away_elo_before']
+        )
+        self.matches_df['elo_diff_abs'] = self.matches_df['elo_diff'].abs()
+        return self
+
     def encode_frequencies(self):
         """Codifica categóricas de alta cardinalidade pela sua frequência.
 

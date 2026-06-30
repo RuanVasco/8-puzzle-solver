@@ -41,9 +41,6 @@ discussão; a Seção 5 conclui e aponta trabalhos futuros.
 - **Sistema de rating Elo**: medida contínua de força de uma equipe, usada aqui
   como principal atributo preditivo.
 
-> TODO: citar trabalhos correlatos (ex.: modelo de Poisson de Maher; Dixon-Coles
-> para previsão de placares) e referências formais no padrão SBC.
-
 ---
 
 ## 3. Metodologia
@@ -99,29 +96,53 @@ discussão; a Seção 5 conclui e aponta trabalhos futuros.
 - **Estratégia de validação.** Avaliação em conjunto de teste temporal separado
   (out-of-time). Métrica principal: **acurácia**; análise complementar com
   **matriz de confusão** e **precision/recall/F1** por classe.
-
-> TODO: incluir ajuste de hiperparâmetros (grid/random search) e validação cruzada
-> temporal como aprofundamento.
+- **Ajuste de hiperparâmetros.** Cada modelo *com* hiperparâmetros (Regressão
+  Logística, Random Forest, Naïve Bayes e KNN) é ajustado via **GridSearchCV** —
+  busca em grade que testa todas as combinações de uma lista de valores. O
+  baseline (DummyClassifier) fica de fora, por não ter hiperparâmetros: ele é a
+  régua e não deve ser otimizado.
+- **Validação cruzada temporal.** A busca **não** usa a validação cruzada aleatória
+  padrão (que embaralharia os jogos e treinaria no futuro para prever o passado —
+  vazamento). Em vez disso usa **`TimeSeriesSplit`**: cada dobra treina no passado
+  e valida no futuro, na mesma filosofia da divisão treino/teste. Isso depende de
+  os dados estarem ordenados por data, o que o CSV bruto já garante.
+- **Toggle "com vs sem ajuste".** Um interruptor (`TUNE_HYPERPARAMS` em
+  `src/main.py`, e o parâmetro `tune` de cada modelo) permite rodar todos os
+  modelos com hiperparâmetros fixos (sem busca) para comparação direta — o
+  experimento controlado reportado na Seção 4.
 
 ---
 
 ## 4. Resultados e Discussão
 
-**Acurácia no conjunto de teste:**
+**Acurácia no conjunto de teste — com vs sem ajuste de hiperparâmetros:**
 
-| Modelo | Acurácia |
-|---|---|
-| **Regressão Logística** | **0.483** |
-| Random Forest | 0.476 |
-| Baseline (classe mais comum) | 0.463 |
-| KNN | 0.452 |
-| Naïve Bayes | 0.418 |
+| Modelo | Sem ajuste | Com ajuste (GridSearchCV) | Melhor configuração encontrada |
+|---|---|---|---|
+| **Regressão Logística** | 0.483 | **0.484** | `C=0.01` (mais regularizada da grade) |
+| Random Forest | 0.476 | 0.478 | `max_depth=5, min_samples_leaf=30` (árvore rasa) |
+| Baseline (classe mais comum) | 0.463 | 0.463 | — (não ajustável) |
+| KNN | 0.452 | **0.473** | `n_neighbors=101, weights=uniform` |
+| Naïve Bayes | 0.418 | 0.418 | `var_smoothing=1e-3` (efeito nulo) |
 
-Apenas **Regressão Logística** e **Random Forest** superam o baseline ingênuo
-(0.463). KNN e Naïve Bayes ficam abaixo — coerente: o Naïve Bayes é penalizado
-por assumir independência entre features correlacionadas (elos de mandante e
-visitante), e o KNN sofre com a aleatoriedade ("jogos parecidos" nem sempre têm o
-mesmo desfecho).
+**Efeito do ajuste.** Em 3 dos 4 modelos o GridSearchCV praticamente não move a
+agulha (Logística +0.001, Random Forest +0.002, Naïve Bayes 0.000). A exceção é o
+**KNN (+0.021)**: o K fixo inicial (15) estava mal escolhido, e a busca revelou que
+este problema ruidoso pede uma vizinhança bem maior (K=101). Ou seja, o ajuste
+serviu mais para **corrigir uma má escolha inicial** (KNN) do que para extrair
+desempenho extra — o que, em si, é um achado.
+
+**Um padrão revelador.** Todos os modelos com botão de complexidade escolheram a
+configuração **mais simples/contida** da grade: a Logística pegou o `C` menor (mais
+regularização), o Random Forest a árvore mais rasa e o KNN a maior vizinhança.
+Isso é evidência numérica independente da tese central: o sinal nos dados é fraco e
+essencialmente linear, e o **teto está nos atributos (o elo), não no algoritmo** —
+dar mais flexibilidade ao modelo só o faz decorar ruído.
+
+Mesmo após o ajuste, apenas **Regressão Logística**, **Random Forest** e **KNN**
+superam o baseline ingênuo (0.463). O **Naïve Bayes** fica abaixo — coerente: é
+penalizado por assumir independência entre features correlacionadas (elos de
+mandante e visitante).
 
 **Matriz de confusão (Regressão Logística):**
 
@@ -129,13 +150,15 @@ mesmo desfecho).
 
 | Real ↓ / Previsto → | Mandante | Empate | Visitante |
 |---|---|---|---|
-| **Mandante** | 794 | 3 | 112 |
-| **Empate** | 428 | 1 | 118 |
-| **Visitante** | 353 | 0 | 154 |
+| **Mandante** | 819 | 1 | 89 |
+| **Empate** | 442 | 0 | 105 |
+| **Visitante** | 376 | 0 | 131 |
 
 **Análise crítica.** A acurácia de ~48% esconde o achado mais importante: o modelo
-**quase nunca prevê empate** (recall do empate ≈ 0.2%, apenas 1 de 547 acertos).
-Ele concentra os palpites em "mandante vence" (recall 87%). Isso reflete o
+**praticamente nunca prevê empate** (recall do empate = 0%, 0 de 547 acertos). Ele
+concentra os palpites em "mandante vence" (recall 90%). Esse comportamento se
+**acentuou** após a regularização escolhida pela busca (`C=0.01`): ao se conter
+mais, o modelo abandona de vez a classe mais difícil. Isso reflete o
 **desbalanceamento** e a natureza notoriamente imprevisível do empate no futebol.
 A acurácia, sozinha, mascararia esse comportamento — daí a importância da matriz de
 confusão.
@@ -153,6 +176,10 @@ motivou a reformulação do problema como classificação de resultado.
 modelos que superam (modestamente) o baseline. O sinal preditivo é dominado por um
 componente linear simples (elo + mando de campo), e modelos mais complexos não
 trouxeram ganho — indicando que o gargalo está nos **atributos**, não no algoritmo.
+O ajuste de hiperparâmetros (GridSearchCV com validação cruzada temporal) reforça
+essa conclusão: todos os modelos preferiram a configuração mais simples da grade, e
+o ganho foi desprezível, exceto no KNN — onde a busca apenas corrigiu uma escolha
+inicial ruim de `K`.
 
 **Atendimento aos objetivos.** O objetivo de mineração (classificar o resultado)
 foi atingido; o de negócio é parcialmente atendido, dado o teto de previsibilidade
@@ -164,7 +191,9 @@ desbalanceadas.
 
 **Trabalhos futuros.** Engenharia de novos atributos (diferença de elo, forma
 recente, distância de viagem); tratamento do desbalanceamento (reamostragem,
-pesos por classe); ajuste de hiperparâmetros; e validação cruzada temporal.
+pesos por classe); ampliação da grade de busca (ex.: confirmar o melhor `K` do KNN,
+que tocou o limite da grade atual); e uso de outras métricas de seleção no
+GridSearch (ex.: F1 macro) para penalizar o abandono da classe "empate".
 
 ---
 
@@ -180,6 +209,10 @@ python -m src.main
 O script trata os dados (`datasets/raw/matches.csv`), salva a versão processada em
 `datasets/processed/`, treina/avalia os modelos e gera a matriz de confusão em
 `reports/`.
+
+Para comparar **com** e **sem** ajuste de hiperparâmetros, basta alternar a flag
+`TUNE_HYPERPARAMS` no topo de `src/main.py` (`True` = GridSearchCV; `False` =
+hiperparâmetros fixos) e rodar de novo.
 
 ### Estrutura do projeto
 

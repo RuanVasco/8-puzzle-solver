@@ -16,6 +16,12 @@ RAW_DIR = BASE_DIR / "datasets" / "raw"              # CSVs originais (não mexe
 PROCESSED_DIR = BASE_DIR / "datasets" / "processed"  # saída já tratada
 REPORTS_DIR = BASE_DIR / "reports"                   # gráficos/relatórios
 
+# Interruptor de ajuste de hiperparâmetros:
+#   True  -> cada modelo busca seus melhores hiperparâmetros (GridSearchCV temporal);
+#   False -> cada modelo usa hiperparâmetros fixos (sem ajuste), para comparação.
+# Não afeta o baseline (Dummy), que não tem hiperparâmetros.
+TUNE_HYPERPARAMS = True
+
 
 if __name__ == "__main__":
     # Monta o pipeline, trata os dados, cria o alvo de resultado e salva.
@@ -40,21 +46,24 @@ if __name__ == "__main__":
     acc_base = evaluate_baseline(baseline, X_test, y_test)
     print(f"\n[Nível 0 - classe mais comum]  acurácia: {acc_base:.3f}")
 
+    modo = "COM ajuste de hiperparâmetros" if TUNE_HYPERPARAMS else "SEM ajuste de hiperparâmetros"
+    print(f"\n>>> Modo: {modo} <<<")
+
     # Passo 4: baseline nível 1 (regressão logística) — primeiro modelo que aprende.
-    logistic = train_logistic(X_train, y_train)
+    logistic = train_logistic(X_train, y_train, tune=TUNE_HYPERPARAMS)
     acc_log = evaluate_logistic(logistic, X_test, y_test)
     print(f"[Nível 1 - regressão logística]  acurácia: {acc_log:.3f}  (régua: {acc_base:.3f})")
 
     # Passo 5: outros classificadores da lista do enunciado, para comparação.
-    forest = train_forest(X_train, y_train)
+    forest = train_forest(X_train, y_train, tune=TUNE_HYPERPARAMS)
     acc_rf = evaluate_forest(forest, X_test, y_test)
     print(f"[Random Forest]                  acurácia: {acc_rf:.3f}")
 
-    nb = train_naive_bayes(X_train, y_train)
+    nb = train_naive_bayes(X_train, y_train, tune=TUNE_HYPERPARAMS)
     acc_nb = evaluate_naive_bayes(nb, X_test, y_test)
     print(f"[Naïve Bayes]                    acurácia: {acc_nb:.3f}")
 
-    knn = train_knn(X_train, y_train)
+    knn = train_knn(X_train, y_train, tune=TUNE_HYPERPARAMS)
     acc_knn = evaluate_knn(knn, X_test, y_test)
     print(f"[KNN]                            acurácia: {acc_knn:.3f}")
 

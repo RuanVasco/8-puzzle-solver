@@ -7,6 +7,7 @@ from .models.logistic import train_logistic, evaluate_logistic
 from .models.forest import train_forest, evaluate_forest
 from .models.naive_bayes import train_naive_bayes, evaluate_naive_bayes
 from .models.knn import train_knn, evaluate_knn
+from .models.tuning import tune_all_models, evaluate_tuned, print_comparison
 from .evaluation import report_and_plot
 
 # Caminhos ancorados no próprio arquivo, não no diretório de execução,
@@ -67,10 +68,43 @@ if __name__ == "__main__":
     acc_knn = evaluate_knn(knn, X_test, y_test)
     print(f"[KNN]                            acurácia: {acc_knn:.3f}")
 
-    # Passo 6: avaliação detalhada do modelo campeão (Logística): relatório por
-    # classe e matriz de confusão salva como imagem para o artigo.
+    # Passo 6: avaliação detalhada do modelo campeão default (Logística):
+    # relatório por classe e matriz de confusão salva como imagem para o artigo.
     report_and_plot(
         logistic, X_test, y_test,
-        title="Matriz de Confusão - Regressão Logística",
+        title="Matriz de Confusão - Regressão Logística (Default)",
         save_path=REPORTS_DIR / "confusion_logistic.png",
+    )
+
+    # ------------------------------------------------------------------
+    # Passo 7: AJUSTE DE HIPERPARÂMETROS (GridSearchCV + TimeSeriesSplit)
+    # ------------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("AJUSTE DE HIPERPARÂMETROS (GridSearchCV + TimeSeriesSplit)")
+    print("=" * 60)
+
+    tuned_results = tune_all_models(X_train, y_train)
+
+    # Passo 8: avaliar modelos tuned no conjunto de teste.
+    tuned_accs = evaluate_tuned(tuned_results, X_test, y_test)
+
+    # Acurácias default para comparação (mesma ordem dos nomes em tuning.py).
+    default_accs = {
+        "Logistic Regression": acc_log,
+        "Random Forest": acc_rf,
+        "Naïve Bayes": acc_nb,
+        "KNN": acc_knn,
+    }
+
+    print_comparison(default_accs, tuned_accs, tuned_results)
+
+    # Passo 9: matriz de confusão do melhor modelo tuned.
+    best_name = max(tuned_accs, key=tuned_accs.get)
+    best_model = tuned_results[best_name][0]
+    print(f"\nMelhor modelo tuned: {best_name} (acurácia: {tuned_accs[best_name]:.3f})")
+
+    report_and_plot(
+        best_model, X_test, y_test,
+        title=f"Matriz de Confusão - {best_name} (Tuned)",
+        save_path=REPORTS_DIR / "confusion_best_tuned.png",
     )

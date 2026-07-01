@@ -44,8 +44,12 @@ MODEL_CONFIGS = {
     },
     "Random Forest": {
         # Árvores não precisam de padronização.
+        # n_jobs=1 aqui de propósito: quem paraleliza é o GridSearchCV (n_jobs=-1).
+        # Deixar a floresta também com n_jobs=-1 cria paralelismo aninhado — gera
+        # oversubscription (mais threads que núcleos) e enche a tela de UserWarning
+        # do joblib sobre config não propagada.
         "pipeline": RandomForestClassifier(
-            random_state=42, n_jobs=-1, class_weight="balanced",
+            random_state=42, n_jobs=1, class_weight="balanced",
         ),
         "param_grid": {
             "n_estimators": [100, 300, 500],

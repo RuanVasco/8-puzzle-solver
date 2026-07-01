@@ -98,17 +98,18 @@ if __name__ == "__main__":
     print_comparison(default_accs, tuned_accs, tuned_results)
 
     # Passo 9: matriz de confusão do melhor modelo tuned.
-    # Campeão escolhido por balanced accuracy (média do recall por classe), não por
-    # acurácia pura — coerente com o scoring do tuning. A acurácia pura elegeria
-    # quem ignora o empate; a balanced accuracy premia quem equilibra as 3 classes.
-    tuned_balanced = {
-        name: compute_metrics(model, X_test, y_test)["recall_macro"]
+    # Campeão escolhido por F1-macro (média do F1 por classe), não por acurácia
+    # pura — coerente com o scoring do tuning. A acurácia pura elegeria quem
+    # ignora o empate; o F1-macro premia quem equilibra precision e recall nas
+    # 3 classes, punindo tanto deixar passar quanto chutar à toa.
+    tuned_f1 = {
+        name: compute_metrics(model, X_test, y_test)["f1_macro"]
         for name, (model, _, _) in tuned_results.items()
     }
-    best_name = max(tuned_balanced, key=tuned_balanced.get)
+    best_name = max(tuned_f1, key=tuned_f1.get)
     best_model = tuned_results[best_name][0]
-    print(f"\nMelhor modelo tuned (balanced accuracy): {best_name} "
-          f"({tuned_balanced[best_name]:.3f})")
+    print(f"\nMelhor modelo tuned (F1-macro): {best_name} "
+          f"({tuned_f1[best_name]:.3f})")
 
     report_and_plot(
         best_model, X_test, y_test,

@@ -78,7 +78,7 @@ def _numeric_features(X):
     return X.select_dtypes(include="number")
 
 
-def tune_model(name, X_train, y_train, n_splits=5, scoring="balanced_accuracy"):
+def tune_model(name, X_train, y_train, n_splits=5, scoring="f1_macro"):
     """Roda GridSearchCV para um modelo e retorna o melhor estimador.
 
     Args:
